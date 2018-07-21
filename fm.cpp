@@ -56,6 +56,15 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
         q15 vmod = 0x7FFF - __builtin_bfin_multr_fr1x16((0x7FFF - voice->velocity), velSense);
         gain(volume_buf, volume_buf, vmod);
 
+    	//gain by amod LFO
+    	if(voice->amod != NULL){
+    		q15 amod_buf[AUDIO_BUFSIZE];
+    		gain(amod_buf, voice->amod, amodSense);
+    		for(int i=0; i<AUDIO_BUFSIZE; i++){
+    			volume_buf[i] = __builtin_bfin_mult_fr1x16(volume_buf[i], 0x7FFF - amod_buf[i]);
+    		}
+    	}
+
 		//TODO: keyboard/range scaling
 
         q16 cfreq[AUDIO_BUFSIZE];
@@ -121,40 +130,12 @@ void Algorithm::getOutput(q31 *buf, Voice *voice) {
     }
 }
 
-template <>
-void Envelope<q31>::setDefaults(){
-    attack  = { _F(0), 0 };
-    decay   = { _F(0), 0 };
-    decay2   = { _F(0), 0 };
-    sustain = { _F(0), 0 };
-    release = { _F(0), 0 };
-}
-
-template <>
-void Envelope<q16>::setDefaults(){
-    attack  = { _F16(0), 0 };
-    decay   = { _F16(0), 0 };
-    decay2   = { _F16(0), 0 };
-    sustain = { _F16(0), 0 };
-    release = { _F16(0), 0 };
-}
-
-template <>
-void Envelope<q15>::setDefaults(){
-    attack  = { _F15(0), 0 };
-    decay   = { _F15(0), 0 };
-    decay2   = { _F15(0), 0 };
-    sustain = { _F15(0), 0 };
-    release = { _F15(0), 0 };
-}
-
-template <class T>
-void Envelope<T>::getOutput(T *buf, Voice *voice, T last){
+void Envelope::getOutput(q15 *buf, Voice *voice, q15 last){
 
 	//for now calculate the envelope twice per buffer
-	T *ptr = buf;
-	T start[3] = {0, 0, 0};
-	T inc[3] = {0, 0, 0};
+	q15 *ptr = buf;
+	q15 start[3] = {0, 0, 0};
+	q15 inc[3] = {0, 0, 0};
 	for(int i=-1; i<2; i++){
 		int idx = i + 1;
 		int32_t ms = voice->ms + i;
@@ -214,19 +195,13 @@ void Envelope<T>::getOutput(T *buf, Voice *voice, T last){
 	}
 }
 
-template<> void LFO<q31>::getOutput(q31 *buf, int *last) {
-	if(last != NULL)
-		*last = _lfo_q31(*last, buf, rate, depth);
-	else
-		lastPos = _lfo_q31(lastPos, buf, rate, depth);
+template<> void LFO<q15>::getOutput(q15 *buf) {
+	_lfo_q15(&_l, buf);
 }
 
 
-template<> void LFO<q16>::getOutput(q16 *buf, int *last) {
-	if(last != NULL)
-		*last = _lfo_q16(*last, buf, rate, depth);
-	else
-		lastPos = _lfo_q16(lastPos, buf, rate, depth);
+template<> void LFO<q16>::getOutput(q16 *buf) {
+	_lfo_q16(&_l, buf);
 }
 
 void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
@@ -240,7 +215,7 @@ void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
 		cfreq[i] = output;
 
 	if(mod != NULL)
-		mod->getOutput(cfreq, &lastLFO); //run it through the modulator
+		mod->getOutput(cfreq); //run it through the modulator
 
 	q31 tmpBuffer[AUDIO_BUFSIZE];
 	zero(tmpBuffer);

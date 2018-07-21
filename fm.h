@@ -48,6 +48,16 @@ extern "C" {
     };
     extern void _fm_modulate(_operator *op, q15 *buf);
     extern void _fm_modulate_feedback(_operator *op, q15 *buf, q15 feedbackLevel);
+
+    struct _lfo {
+        q15 *current;
+        q16 cfreq;
+        q31 err;
+        q15 depth;
+    };
+
+    extern void _lfo_q15(_lfo *l, q15 *buf);
+    extern void _lfo_q16(_lfo *l, q16 *buf);
 };
 
 /************* BASE MODULATOR CLASS **************/
@@ -74,17 +84,26 @@ public:
 };
 
 /************* ENVELOPE CLASS **************/
-template<class T> class Envelope : public Modulator<T> {
+class Envelope : public Modulator<q15> {
 public:
-    Envelope() { setDefaults(); }
+    Envelope() {
+    	attack.time = 0;
+    	attack.level = 0;
+    	decay.time = 0;
+    	decay.level = 0;
+    	decay2.time = 0;
+    	decay2.level = 0;
+    	sustain.time = 0;
+    	sustain.level = 0;
+    	release.time = 0;
+    	release.level = 0;
+    }
     ~Envelope() {}
 
-    void getOutput(T *buf, Voice *voice, T last);
-
-    void setDefaults();
+    void getOutput(q15 *buf, Voice *voice, q15 last);
 
     typedef struct {
-        T level;
+        q15 level;
         int32_t time;
     } envParam;
 
@@ -96,9 +115,6 @@ public:
 private:
 
 };
-template class Envelope<q15>;
-template class Envelope<q16>;
-template class Envelope<q31>;
 
 /************* OPERATOR CLASS **************/
 class Operator : public Modulator<q15> {
@@ -117,12 +133,13 @@ public:
 
     Modulator<q16> *carrier;
 
-    Envelope<q15> volume;
+    Envelope volume;
 
     bool active;
     bool isOutput;
 
     q15 velSense;
+    q15 amodSense;
 
     q15 feedbackLevel;
 
@@ -177,15 +194,20 @@ protected:
 /************* LFO CLASS **************/
 template<class T> class LFO : public Modulator<T> {
 public:
-	LFO(q16 rate) : rate(rate), depth(0), lastPos(0), carrier(NULL) {}
+	LFO() {
+        _l.current = _fm_sine;
+        _l.cfreq = 0;
+        _l.err = 0;
+        _l.depth = 0;
+    }
     ~LFO() {}
 
-    void getOutput(T *buf, int *last=NULL);
+    void setDepth(q15 depth){ _l.depth = depth; }
+    q15 getDepth(){ return _l.depth; }
+    void setRate(q16 rate){ _l.cfreq = rate; }
+    void getOutput(T *buf);
 
-    T depth;
-    q16 rate;
-    int lastPos;
-    Modulator<q16> *carrier;
+    _lfo _l;
 };
 
 /************* VOICE CLASS **************/
@@ -194,16 +216,15 @@ class Voice : public Modulator<q16>{
 public:
     Voice(Algorithm *algo, q31 gain = _F(.999)) {
     	algorithm = algo;
-    	t = 0;
     	active = false;
     	ms = 1;
     	this->gain = gain;
     	hold = false;
     	queueStop = false;
     	interruptable = true;
-    	lastLFO = 0;
     	velocity = _F15(.999);
     	cfreq = NULL;
+        amod = NULL;
         for(int i=0; i<FM_MAX_OPERATORS;i++){
             _operator *op = &_ops[i];
             op->current = _fm_sine;
@@ -216,19 +237,21 @@ public:
     }
     ~Voice() {}
 
-    q28 getT() { return t; }
     void getOutput(q16 *buf) {
     	copy((q31 *)buf, (q31 *)cfreq);
     };
 
     void play(q31 *buf, q31 gain=0, LFO<q16> *mod=NULL);
+    void play(q31 *buf, q15 *amod){
+        this->amod = amod;
+        play(buf);
+    }
     void trigger(bool state, bool immediateCut = false) {
     	if(!state && !active) return;
         if(state){
             active = true;
             for(int i=0; i<FM_MAX_OPERATORS;i++)
                 _ops[i].current = _fm_sine;
-            lastLFO = 0;
             ms = 2;
         }
         if(immediateCut){
@@ -251,13 +274,10 @@ public:
 
 protected:
     _operator _ops[FM_MAX_OPERATORS];
-
-    //TODO: this currently only allows one lfo. Fix if necessary.
-    int lastLFO;
     q16 *cfreq;
+    q15 *amod;
 
 private:
-    q28 t;
     Algorithm *algorithm;
 };
 
