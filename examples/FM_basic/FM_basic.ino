@@ -40,9 +40,8 @@ q31 outL[AUDIO_BUFSIZE];
 //this will be called when a buffer is ready to be filled
 void audioHook(q31 *data)
 {
+  zero(outL);
   v1.play(outL);
-  //the output is 24 bit
-  for(int i=0; i<AUDIO_BUFSIZE; i++) outL[i] >>= 7;
 
   interleave(data, outL, outL);
 }
@@ -69,25 +68,29 @@ void setup(){
     //******* DEFINE ENVELOPES *******//
 
     //***** OP2 ENVELOPE *****//
-    op2.volume.attack.time = 1; // 1ms attack time
-    op2.volume.attack.level = _F(.999); // max attack level (99.9 %)
+    op2.volume.setRate(ENVELOPE_ATTACK, 300); // 1ms attack time
+    op2.volume.setLevel(ENVELOPE_ATTACK, _F15(.999)); // max attack level (99.9 %)
 
-    op2.volume.decay.time = 300; // 300 ms decay
-    op2.volume.decay.level = _F(0); // decay to zero
+    op2.volume.setRate(ENVELOPE_DECAY, 100); // 300 ms decay
+    op2.volume.setLevel(ENVELOPE_DECAY, _F15(.5)); // decay to zero
 
-    op2.volume.sustain.level = _F(0); // zero sustain
+    op2.volume.setRate(ENVELOPE_SUSTAIN, 0); // 300 ms decay
+    op2.volume.setLevel(ENVELOPE_SUSTAIN, _F15(.25));
+
+    op2.volume.setRate(ENVELOPE_RELEASE, 500);
+    op2.volume.setLevel(ENVELOPE_RELEASE, _F15(0));
 
     //***** OP1 ENVELOPE *****//
-    op1.volume.sustain.level = _F(.5); // 50% sustain
+    op1.volume.setLevel(ENVELOPE_SUSTAIN, _F15(.5)); // 50% sustain
 
     //***** OP3 ENVELOPE *****//
-    op3.volume.attack.time = 3; // 3ms attack time
-    op3.volume.attack.level = _F(.6); // 60% attack
+    op3.volume.setRate(ENVELOPE_ATTACK, 3); // 3ms attack time
+    op3.volume.setLevel(ENVELOPE_ATTACK, _F15(.6)); // 60% attack
 
-    op3.volume.decay.time = 300; // 300ms decay time
-    op3.volume.decay.level = _F(0); // decay to zero
+    op3.volume.setRate(ENVELOPE_DECAY, 300); // 300ms decay time
+    op3.volume.setLevel(ENVELOPE_DECAY, _F15(0)); // decay to zero
 
-    op3.volume.sustain.level = _F(0); //zero sustain
+    op3.volume.setLevel(ENVELOPE_SUSTAIN, _F15(0)); //zero sustain
 
     iface.begin();
 
@@ -122,7 +125,7 @@ void loop(){
             return;
         }
         v1.trigger(true); //note on (start all envelope attacks)
-        delay(500);
+        delay(1000);
         v1.trigger(false); //note off (start all envelope release)
     }
     delay(10);
