@@ -48,9 +48,7 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
 
         //calculate envelope
         q15 volume_buf[AUDIO_BUFSIZE];
-        volume.getOutput(volume_buf, voice, voice->_ops[id].lastVolume);
-        if(voice->active)
-        	voice->_ops[id].lastVolume = volume_buf[AUDIO_BUFSIZE - 1]; //save the last volume for release
+        volume.getOutput(volume_buf, &voice->_envs[id], voice);
 
 		//velocity scaling
         q15 vmod = 0x7FFF - __builtin_bfin_multr_fr1x16((0x7FFF - voice->velocity), velSense);
@@ -130,68 +128,53 @@ void Algorithm::getOutput(q31 *buf, Voice *voice) {
     }
 }
 
-void Envelope::getOutput(q15 *buf, Voice *voice, q15 last){
+void Envelope::recalculate(){
+	int prev = 3;
+	for(int i=0; i<4; i++){
+		states[i].roc = (states[i].level - states[prev].level)/(states[i].rate * (AUDIO_BUFSIZE/2));
+		prev = (prev + 1)%4;
+	}
+}
 
-	//for now calculate the envelope twice per buffer
-	q15 *ptr = buf;
-	q15 start[3] = {0, 0, 0};
-	q15 inc[3] = {0, 0, 0};
-	for(int i=-1; i<2; i++){
-		int idx = i + 1;
-		int32_t ms = voice->ms + i;
-        //tick the envelope
-		if(!voice->active){
-			if(voice->ms > release.time){
-				start[idx] = release.level;
-				inc[idx] = 0;
-			}
-			else{
-				//we are in R
-				if(ms == -1)
-					start[idx] = last;
-				else
-					start[idx] = last + (release.level - last)/release.time * ms;
-				inc[idx] = (release.level - last)/release.time;
+void Envelope::setRate(uint8_t param, int32_t rate){
+	if(rate < 1) rate = 1;
+	states[param].rate = rate;
+	recalculate();
+}
+
+void Envelope::setLevel(uint8_t param, q15 level){
+	//make sure it's a multiple of (AUDIO_BUFSIZE/2)
+	q31 lvlAdj = (q31)level << 16;
+	states[param].level = (lvlAdj + ((AUDIO_BUFSIZE/2)-1)) & ~((AUDIO_BUFSIZE/2)-1);
+	recalculate();
+}
+
+void Envelope::getOutput(q15 *buf, _envelope *e, Voice *v){
+	q31 roc;
+	for(int t=v->ms; t<v->ms+2; t++){
+		if(!v->active && e->state != ENVELOPE_RELEASE){
+			e->state = ENVELOPE_RELEASE;
+			e->per = 0;
+		}
+		else if(t == 0){
+			e->state = ENVELOPE_ATTACK;
+			e->per = 0;
+		}
+
+		e->lim = states[e->state].level;
+		_envelope_interpolate(e, buf, states[e->state].roc);
+		//if(e->state == ENVELOPE_ATTACK) __asm__ volatile("EMUEXCPT;");
+
+		e->per++;
+		if( (states[e->state].level == e->err && states[e->state].roc > 0) ||
+			(states[e->state].roc == 0 && e->per >= states[e->state].rate))
+			{
+			if(e->state != ENVELOPE_RELEASE && e->state != ENVELOPE_SUSTAIN){
+				e->state++;
+				e->per = 0;
 			}
 		}
-		else{
-            //we are in ADS
-			if(ms >= attack.time + decay.time + decay2.time){
-				//Sustain
-				start[idx] = sustain.level;
-				inc[idx] = 0;
-			}
-			else if(ms >= attack.time + decay.time){
-            	//Decay2
-				start[idx] = decay.level + (sustain.level - decay.level)/decay2.time * (ms - decay.time);
-				inc[idx] = (sustain.level - decay.level)/decay2.time;
-				voice->hold = true;
-            }
-            else if(ms > attack.time){
-                //Decay
-            	start[idx] = attack.level + (decay.level - attack.level)/decay.time * (ms - attack.time);
-            	inc[idx] = (decay.level - attack.level)/decay.time;
-            	voice->hold = true;
-            	voice->interruptable = false;
-            }
-            else{
-            	voice->hold = true;
-            	voice->interruptable = false;
-                //Attack
-            	if(ms == -1)
-            		start[idx] = 0;
-            	else
-					start[idx] = attack.level/attack.time * ms;
-				inc[idx] = attack.level/attack.time;
-            }
-        }
-		inc[idx] = inc[idx]/(AUDIO_BUFSIZE/2);
-    }
-
-	for(int i=1; i<=2; i++){
-		*ptr++ = start[i-1];
-		for(int j=1; j<AUDIO_BUFSIZE/2; j++)
-			*ptr++ = *(ptr-1) + inc[i];
+		buf += AUDIO_BUFSIZE/2;
 	}
 }
 
@@ -207,8 +190,6 @@ template<> void LFO<q16>::getOutput(q16 *buf) {
 void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
 	if(gain)
 		this->gain = gain;
-	this->hold = false;
-	this->interruptable = true;
 
 	cfreq = (q16 *)malloc(sizeof(q16)*AUDIO_BUFSIZE);
 	for(int i=0; i<AUDIO_BUFSIZE; i++)
@@ -230,13 +211,7 @@ void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
 		buf[i] = u;
 	}
 
-	if(!this->hold && this->queueStop){
-		this->active = false;
-		ms = 2;
-		this->queueStop = false;
-	}
-	else
-    	ms += 2;
+	ms += 2;
 
 	free(cfreq);
 }

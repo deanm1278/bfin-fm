@@ -30,6 +30,13 @@ using namespace FX;
 #define RATIO_MIN_SEVENTH	.78180
 #define RATIO_MAJ_SEVENTH	.88775
 
+enum {
+	ENVELOPE_ATTACK,
+	ENVELOPE_DECAY,
+	ENVELOPE_SUSTAIN,
+	ENVELOPE_RELEASE
+};
+
 class Voice;
 class Operator;
 class Algorithm;
@@ -44,7 +51,6 @@ extern "C" {
         q15 *vol;
         q31 err;
         q15 lastFeedback;
-        q15 lastVolume;
     };
     extern void _fm_modulate(_operator *op, q15 *buf);
     extern void _fm_modulate_feedback(_operator *op, q15 *buf, q15 feedbackLevel);
@@ -58,6 +64,15 @@ extern "C" {
 
     extern void _lfo_q15(_lfo *l, q15 *buf);
     extern void _lfo_q16(_lfo *l, q16 *buf);
+
+    struct _envelope {
+    	q31 err;
+    	q31 lim;
+    	int state;
+    	int per;
+    };
+
+    extern void _envelope_interpolate(_envelope *e, q15 *buf, q31 roc);
 };
 
 /************* BASE MODULATOR CLASS **************/
@@ -87,31 +102,27 @@ public:
 class Envelope : public Modulator<q15> {
 public:
     Envelope() {
-    	attack.time = 0;
-    	attack.level = 0;
-    	decay.time = 0;
-    	decay.level = 0;
-    	decay2.time = 0;
-    	decay2.level = 0;
-    	sustain.time = 0;
-    	sustain.level = 0;
-    	release.time = 0;
-    	release.level = 0;
+    	for(int i=0; i<4; i++){
+    		states[i].rate = 1;
+    		states[i].level = 0;
+    		states[i].roc = 0;
+    	}
+    	recalculate();
     }
     ~Envelope() {}
 
-    void getOutput(q15 *buf, Voice *voice, q15 last);
+    void recalculate();
+    void setRate(uint8_t param, int32_t rate);
+    void setLevel(uint8_t param, q15 level);
+    void getOutput(q15 *buf, _envelope *e, Voice *v);
 
     typedef struct {
-        q15 level;
-        int32_t time;
+        q31 level;
+        int32_t rate;
+        q31 roc;
     } envParam;
 
-    envParam attack,
-             decay,
-			 decay2,
-             sustain,
-             release;
+    envParam states[4];
 private:
 
 };
@@ -217,11 +228,8 @@ public:
     Voice(Algorithm *algo, q31 gain = _F(.999)) {
     	algorithm = algo;
     	active = false;
-    	ms = 1;
+    	ms = 0;
     	this->gain = gain;
-    	hold = false;
-    	queueStop = false;
-    	interruptable = true;
     	velocity = _F15(.999);
     	cfreq = NULL;
         amod = NULL;
@@ -232,7 +240,9 @@ public:
             op->mod = NULL;
             op->vol = NULL;
             op->lastFeedback = 0;
-            op->lastVolume = 0;
+
+            _envelope *env = &_envs[i];
+            env->err = 0;
         }
     }
     ~Voice() {}
@@ -246,34 +256,26 @@ public:
         this->amod = amod;
         play(buf);
     }
-    void trigger(bool state, bool immediateCut = false) {
+    void trigger(bool state) {
     	if(!state && !active) return;
         if(state){
-            active = true;
             for(int i=0; i<FM_MAX_OPERATORS;i++)
                 _ops[i].current = _fm_sine;
-            ms = 2;
+            ms = 0;
         }
-        if(immediateCut){
-        	active = state;
-        	ms = 2;
-        }
-        else
-        	queueStop = !state;
+        active = state;
     }
 
-    volatile bool active;
-    volatile bool queueStop;
+    bool active;
     q15 velocity;
     uint32_t ms;
     q31 gain;
-    bool hold;
-    bool interruptable;
 
     friend class Operator;
 
 protected:
     _operator _ops[FM_MAX_OPERATORS];
+    _envelope _envs[FM_MAX_OPERATORS];
     q16 *cfreq;
     q15 *amod;
 

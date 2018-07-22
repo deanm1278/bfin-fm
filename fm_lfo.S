@@ -18,9 +18,10 @@
 .global __lfo_q15;
 .type __lfo_q15, STT_FUNC;
 __lfo_q15:
-	[--SP] = ( R7:2, P5:3 );
+	[--SP] = ( R7:2, P5:2 );
 
 	P3 = R1; //buf
+	P2 = 2 (X);
 
 	P5 = R0;
 	P4 = R0; //_lfo
@@ -66,8 +67,7 @@ __lfo_q15:
 		//multiply by depth
 		R4.L = R4.L * R6.L;
 
-		W[P3] = R4.L;
-		P3 += 2;
+		W[P3++P2] = R4.L;
 
 	LOOP_END lfo15loop;
 
@@ -76,7 +76,7 @@ __lfo_q15:
 	P5 += 8;
 	[P5] = R0; //_lfo->err
 
-	( R7:2, P5:3 ) = [ SP ++ ];
+	( R7:2, P5:2 ) = [ SP ++ ];
 	RTS;
 
 /*

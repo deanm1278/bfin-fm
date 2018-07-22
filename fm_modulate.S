@@ -52,7 +52,7 @@ __mult_q16_single:
 .global __fm_modulate;
 .type __fm_modulate, STT_FUNC;
 __fm_modulate:
-	[--SP] = ( R7:2, P5:3 );
+	[--SP] = ( R7:2, P5:2 );
 
 	P5 = R0;
 	P4 = R0; //_operator
@@ -85,6 +85,7 @@ __fm_modulate:
 	L1 = 8192; //sizeof(__fm_sine)
 
 	P3 = R1; //buf
+	P2 = 2 (X);
 
 	R7 = FM_LOOKUP_INC;
 
@@ -126,8 +127,7 @@ __fm_modulate:
 		//add to output
 		R4.L = R4.L + R3.L (S);
 
-		W[P3] = R4.L;
-		P3 += 2;
+		W[P3++P2] = R4.L;
 
 	LOOP_END fmOutputLoop;
 
@@ -136,5 +136,5 @@ __fm_modulate:
 	P5 += 16;
 	[P5] = R0; //_operator->err
 
-	( R7:2, P5:3 ) = [ SP ++ ];
+	( R7:2, P5:2 ) = [ SP ++ ];
 	RTS;

@@ -16,7 +16,7 @@
 .global __fm_modulate_feedback;
 .type __fm_modulate_feedback, STT_FUNC;
 __fm_modulate_feedback:
-[--SP] = ( R7:2, P5:3 );
+[--SP] = ( R7:2, P5:2 );
 
 	P5 = R0;
 	P4 = R0; //_operator
@@ -45,6 +45,7 @@ __fm_modulate_feedback:
 	L1 = 8192; //sizeof(__fm_sine)
 
 	P3 = R1; //buf
+	P2 = 2 (X);
 
 	[--SP] = R2; //feedbackLevel
 
@@ -99,8 +100,7 @@ __fm_modulate_feedback:
 		//add to output
 		R4.L = R4.L + R1.L (S);
 
-		W[P3] = R4.L;
-		P3 += 2;
+		W[P3++P2] = R4.L;
 
 	LOOP_END fmFeedbackLoop;
 
@@ -113,5 +113,5 @@ __fm_modulate_feedback:
 	P5 += 4;
 	W[P5] = R6.L; //_operator->lastFeedback
 
-	( R7:2, P5:3 ) = [ SP ++ ];
+	( R7:2, P5:2 ) = [ SP ++ ];
 	RTS;
