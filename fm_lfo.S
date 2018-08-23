@@ -46,7 +46,7 @@ __lfo_q15:
 	LC0 = R4;
 	LOOP lfo15loop LC0;
 	LOOP_BEGIN lfo15loop;
-		(R3:R2) = ((A1:0) = R7 * R1) (TFU);
+		(R3:2) = ((A1:0) = R7 * R1) (TFU);
 
 		R2 = PACK(R3.L, R2.H);
 
@@ -115,7 +115,7 @@ __lfo_q16:
 		R5 = R1 >> 16; //integer
 		R4 = FM_LOOKUP_INC;
 		R3 = R4 * R7 (FU);
-		(R5:R4) = ((A1:0) = R4 * R5) (TFU);
+		(R5:4) = ((A1:0) = R4 * R5) (TFU);
 
 		R2 = R4 + R3; // R2 = pi*freq*t
 
@@ -140,7 +140,7 @@ __lfo_q16:
 		//multiply by depth
 		R3 = [SP];
 
-		(R5:R4) = ((A1:0) = R3 * R2) (T);
+		(R5:4) = ((A1:0) = R3 * R2) (T);
 		R5 <<= 16;
 		R4 >>= 16;
 		R2 = R5 | R4;
@@ -149,7 +149,7 @@ __lfo_q16:
 
 		R3 = [P0];
 
-		(R5:R4) = ((A1:0) = R3 * R2) (TFU);
+		(R5:4) = ((A1:0) = R3 * R2) (TFU);
 		R5 <<= 16;
 		R4 >>= 16;
 		R4 = R5 | R4;
