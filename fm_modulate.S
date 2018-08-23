@@ -22,7 +22,7 @@ __mult_q16:
 	LOOP_BEGIN mult16Loop;
 		R2 = [I0];
 
-		(R5:4) = ((A1:0) = R2 * R1) (TFU);
+		(R5:4) = ((A1:0) = R2 * R1) (IU);
 		R2 = PACK(R5.L, R4.H);
 
 		[I0++M0] = R2;
@@ -96,7 +96,7 @@ __fm_modulate:
 	LOOP fmOutputLoop LC0;
 	LOOP_BEGIN fmOutputLoop;
 		R1 = [I2++M2];
-		(R3:2) = ((A1:0) = R7 * R1) (TFU);
+		(R3:2) = ((A1:0) = R7 * R1) (IU);
 
 		R2 = PACK(R3.L, R2.H) || R3 = [I0++M0];
 

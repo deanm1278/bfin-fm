@@ -57,7 +57,7 @@ __fm_modulate_feedback:
 	LOOP fmFeedbackLoop LC0;
 	LOOP_BEGIN fmFeedbackLoop;
 		R1 = [I2++M2];
-		(R3:2) = ((A1:0) = R7 * R1) (TFU);
+		(R3:2) = ((A1:0) = R7 * R1) (IU);
 
 		R2 = PACK(R3.L, R2.H);
 
