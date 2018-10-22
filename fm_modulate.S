@@ -36,7 +36,7 @@ __mult_q16:
 .type __mult_q16_single, STT_FUNC;
 __mult_q16_single:
 
-	(R1:0) = ((A1:0) = R0 * R1) (TFU);
+	(R1:0) = ((A1:0) = R0 * R1) (IU);
 	R0 = PACK(R1.L, R0.H);
 
 	RTS;
@@ -120,7 +120,16 @@ __fm_modulate:
 
 		M1 = R4;
 		I1 += M1;
+#ifdef INTERPOLATE_FM
+		R4.L = W[I1++]; // move to next for interpolation
+		R2.L = W[I1--]; // load value to interpolate
+		R3 = R0 >> 3; // get fractional error
+		R2.L = R2.L - R4.L; // difference = next - current
+		R2.H = (A1 = R2.L * R3.L) (M); // multiply by error (error is unsigned and difference is signed)
+		R4.L = R4.L + R2.H; // add interpolated value
+#else
 		R4 = [I1];
+#endif
 		I1 -= M1 || R3 = [I3++M3];
 		R4.L = R4.L * R3.L || R3 = [P3];
 

@@ -9,6 +9,13 @@
 
 using namespace FX;
 
+static RAMB q16 cfreq_stat[AUDIO_BUFSIZE];
+static RAMB q31 tmpBuffer[AUDIO_BUFSIZE];
+static RAMB q16 cfreq_op[AUDIO_BUFSIZE];
+static RAMB q15 volume_buf[AUDIO_BUFSIZE];
+static RAMB q15 amod_buf[AUDIO_BUFSIZE];
+static RAMB q15 tmpbuf[AUDIO_BUFSIZE];
+
 Operator::Operator(int id) : volume(), id(id) {
     isOutput = false;
     active = true;
@@ -38,7 +45,7 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
         calculated = true;
 
     	//calculate modulators
-    	q15 mod_buf[AUDIO_BUFSIZE];
+        q15 mod_buf[AUDIO_BUFSIZE];
     	zero(mod_buf);
 
         for(int ix=0; ix<OP_MAX_INPUTS; ix++){
@@ -47,7 +54,6 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
         }
 
         //calculate envelope
-        q15 volume_buf[AUDIO_BUFSIZE];
         volume.getOutput(volume_buf, &voice->_envs[id], voice);
 
 		//velocity scaling
@@ -56,7 +62,6 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
 
     	//gain by amod LFO
     	if(voice->amod != NULL){
-    		q15 amod_buf[AUDIO_BUFSIZE];
     		gain(amod_buf, voice->amod, amodSense);
     		for(int i=0; i<AUDIO_BUFSIZE; i++){
     			volume_buf[i] = __builtin_bfin_mult_fr1x16(volume_buf[i], 0x7FFF - amod_buf[i]);
@@ -64,10 +69,8 @@ void Operator::getOutput(q15 *buf, Voice *voice) {
     	}
 
 		//TODO: keyboard/range scaling
-
-        q16 cfreq[AUDIO_BUFSIZE];
-        carrier->getOutput(cfreq);
-		voice->_ops[id].cfreq = cfreq;
+        carrier->getOutput(cfreq_op);
+		voice->_ops[id].cfreq = cfreq_op;
 		voice->_ops[id].mod = mod_buf;
 		voice->_ops[id].vol = volume_buf;
 
@@ -112,7 +115,6 @@ void Algorithm::getOutput(q31 *buf, Voice *voice) {
     }
 
 	//TODO: auto-determine outputs based on routing
-	q15 tmpbuf[AUDIO_BUFSIZE];
     for(int i=0; i<numOps; i++){
 		zero(tmpbuf);
         if(ops[i]->isOutput && ops[i]->active){
@@ -137,7 +139,8 @@ void Envelope::recalculate(){
 }
 
 void Envelope::setRate(uint8_t param, int32_t rate){
-	if(rate < 1) rate = 1;
+	//if(rate < 1) rate = 1;
+	rate = max(rate, 0);
 	states[param].rate = rate;
 	recalculate();
 }
@@ -191,14 +194,15 @@ void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
 	if(gain)
 		this->gain = gain;
 
-	cfreq = (q16 *)malloc(sizeof(q16)*AUDIO_BUFSIZE);
-	for(int i=0; i<AUDIO_BUFSIZE; i++)
-		cfreq[i] = output;
+	if(dynamicFreq){
+		cfreq = cfreq_stat;
+		for(int i=0; i<AUDIO_BUFSIZE; i++)
+			cfreq[i] = output;
+	}
 
 	if(mod != NULL)
 		mod->getOutput(cfreq); //run it through the modulator
 
-	q31 tmpBuffer[AUDIO_BUFSIZE];
 	zero(tmpBuffer);
 
 	algorithm->getOutput(tmpBuffer, this);
@@ -212,6 +216,4 @@ void Voice::play(q31 *buf, q31 gain, LFO<q16> *mod) {
 	}
 
 	ms += 2;
-
-	free(cfreq);
 }

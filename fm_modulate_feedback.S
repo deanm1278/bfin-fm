@@ -84,7 +84,16 @@ __fm_modulate_feedback:
 
 		M1 = R4;
 		I1 += M1;
+#ifdef INTERPOLATE_FM
+		R4.L = W[I1++]; // move to next for interpolation
+		R2.L = W[I1--]; // load value to interpolate
+		R3 = R0 >> 3; // get fractional error
+		R2.L = R2.L - R4.L; // difference = next - current
+		R2.H = (A1 = R2.L * R3.L) (M); // multiply by error (error is unsigned and difference is signed)
+		R4.L = R4.L + R2.H; // add interpolated value
+#else
 		R4 = [I1];
+#endif
 		R4 = R4.L (X);
 		I1 -= M1 || R1 = [I3++M3];
 

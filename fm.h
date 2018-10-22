@@ -233,6 +233,7 @@ public:
     	velocity = _F15(.999);
     	cfreq = NULL;
         amod = NULL;
+        dynamicFreq = true;
         for(int i=0; i<FM_MAX_OPERATORS;i++){
             _operator *op = &_ops[i];
             op->current = _fm_sine;
@@ -247,6 +248,16 @@ public:
     }
     ~Voice() {}
 
+    void setOutput(q16 *buf){
+    	dynamicFreq = false;
+    	cfreq = buf;
+    }
+
+    void setOutput(q16 val){
+    	dynamicFreq = true;
+    	output = val;
+    }
+
     void getOutput(q16 *buf) {
     	copy((q31 *)buf, (q31 *)cfreq);
     };
@@ -259,8 +270,10 @@ public:
     void trigger(bool state) {
     	if(!state && !active) return;
         if(state){
-            for(int i=0; i<FM_MAX_OPERATORS;i++)
-                _ops[i].current = _fm_sine;
+        	if(!active){
+				for(int i=0; i<FM_MAX_OPERATORS;i++)
+					_ops[i].current = _fm_sine;
+        	}
             ms = 0;
         }
         active = state;
@@ -281,6 +294,7 @@ protected:
 
 private:
     Algorithm *algorithm;
+    bool dynamicFreq;
 };
 
 #endif /* AUDIOFX_FM_H_ */
